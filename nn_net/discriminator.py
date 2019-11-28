@@ -7,13 +7,15 @@ import numpy as np
 import nn_net.misc as misc
 import nn_net.convnet as CNN
 
+from copy import deepcopy
+
 
 class ImgnLocalDisc(nn.Module):
-    def __init__(self, input_shape):
+    def __init__(self, feature_shape, code_shape):
         super(ImgnLocalDisc, self).__init__()
-
+        cat_shape = (feature_shape[0] + code_shape[0], feature_shape[1], feature_shape[2])
         config = dict(
-            input_shape=input_shape,
+            input_shape=cat_shape,
             layers=[dict(layer='conv', args=(512, 1, 1, 0), bn=True, act='ReLU'),
                     dict(layer='conv', args=(512, 1, 1, 0), bn=True, act='ReLU'),
                     dict(layer='conv', args=(1, 1, 1, 0), bn=True, act='ReLU')],
@@ -21,8 +23,31 @@ class ImgnLocalDisc(nn.Module):
         )
 
         self.conv = CNN.ConvNet(config)
+        self.shape_hist = self.compute_shape()
 
-    def forward(self, C, Y):
+    def compute_shape(self):
+        shape = self.config['input_shape']
+        shape_hist = []
+
+        layers = self.config['layers']
+        for l in layers:
+            if l['layer'] == 'conv':
+                dim_in, dim_x, dim_y = shape
+                dim_out, f, s, p = l['args']
+                shape = (dim_out, (dim_x - f + 2 * p) // s + 1, (dim_y - f + 2 * p) // s + 1)
+                shape_hist.append(deepcopy(shape))
+            elif l['layer'] == 'flatten':
+                s = 1
+                for d in shape:
+                    s *= d
+                shape = (s, )
+                shape_hist.append(deepcopy(shape))
+            elif l['layer'] == 'linear':
+                shape = l['args']
+                shape_hist.append(deepcopy(shape))
+        return shape_hist
+
+    def forward(self, Y, C):
         """
         :param C: feature map, (N, 256, 4, 4)
         :param Y: global feature vector, (N, 64)
@@ -38,10 +63,10 @@ class ImgnLocalDisc(nn.Module):
 
 
 class ImgnGlobalDisc(nn.Module):
-    def __init__(self, input_shape):
+    def __init__(self, feature_shape, code_shape):
         super(ImgnGlobalDisc, self).__init__()
         conv2linear = {
-            'input_shape': input_shape,
+            'input_shape': feature_shape,
             'layers': [
                 # {'layer': 'conv', 'args': (64, 3, 1, 0), 'bn': False, 'act': 'ReLU'},
                 # {'layer': 'conv', 'args': (32, 3, 1, 0), 'bn': False, 'act': 'ReLU'},
@@ -50,7 +75,7 @@ class ImgnGlobalDisc(nn.Module):
             'local_task_idx': (None, None)
         }
 
-        output_shape = (sum(input_shape) + 64, )
+        output_shape = (sum(feature_shape) + code_shape[0],)
 
         linear2scalar = {
             'input_shape': output_shape,
@@ -67,7 +92,7 @@ class ImgnGlobalDisc(nn.Module):
         self.conv2linear = CNN.ConvNet(conv2linear)
         self.linear2scalar = CNN.ConvNet(linear2scalar)
 
-    def forward(self, C, Y):
+    def forward(self, Y, C):
         """
         :param C: feature map, (N, 256, 4, 4)
         :param Y: global feature vector, (N, 64)
