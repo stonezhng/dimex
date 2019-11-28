@@ -58,6 +58,8 @@ class ConvNet(nn.Module):
                 modules_seq.add_module('bn', nn.BatchNorm1d(out_shape[0]))
         if description['act'] == 'ReLU':
             modules_seq.add_module('activate', nn.ReLU())
+        elif description['act'] == 'sigmoid':
+            modules_seq.add_module('activate', nn.Sigmoid())
 
     def __init__(self, configs):
         super(ConvNet, self).__init__()

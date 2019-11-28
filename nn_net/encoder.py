@@ -40,9 +40,9 @@ class enc_clf(nn.Module):
         return c, z
 
 
-class imgn_encoder(nn.Module):
+class ImgnEncoder(nn.Module):
     def __init__(self):
-        super(imgn_encoder, self).__init__()
+        super(ImgnEncoder, self).__init__()
 
         config = dict(
             input_shape=(3, 64, 64),
