@@ -60,12 +60,14 @@ mnist_test = datasets.MNIST(root='.', train=False, download=True,
 train_subset = torch.utils.data.Subset(mnist_train, thousand)
 test_subset = torch.utils.data.Subset(mnist_test, thousand)
 
+print args.debug
+
 if args.debug:
     trainset = train_subset
     testset = test_subset
 else:
     trainset = mnist_train
-    testset = test_subset
+    testset = mnist_test
 
 train_loader = torch.utils.data.DataLoader(
     trainset, batch_size=args.batches, shuffle=True, num_workers=4 * num_devices)

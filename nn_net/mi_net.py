@@ -123,23 +123,31 @@ class TriLayerNet(nn.Module):
         return output
 
 
-class enc_IB(nn.Module):
-    def __init__(self, device):
+class flate_enc_IB(nn.Module):
+    def __init__(self, device, x_shape, code_shape):
         """
         Replication of statistics network from MINE
         """
-        super(enc_IB, self).__init__()
+        super(flate_enc_IB, self).__init__()
         self.device = device
-        self.fc1 = nn.Linear(1296, 1296)
-        self.fc2 = nn.Linear(1296, 1296)
-        self.fc3 = nn.Linear(1296, 1)
 
-    def forward(self, z, x):
-        inp = torch.cat((z, x), 1)
-        b = x.shape[0]
+        input_dim = np.prod(x_shape) + code_shape[0]
+
+        self.fc1 = nn.Linear(input_dim, input_dim)
+        self.fc2 = nn.Linear(input_dim, input_dim)
+        self.fc3 = nn.Linear(input_dim, 1)
+
+    def forward(self, x, z):
+
+        # print x.shape
+        fx = x.flatten(start_dim=1)
+        # print fx.shape
+
+        inp = torch.cat((z, fx), 1)
+        b = fx.shape[0]
 
         z_dim = z.shape[1]
-        x_dim = x.shape[1]
+        x_dim = fx.shape[1]
         l = z_dim + x_dim
         e_1 = np.random.normal(0., np.sqrt(0.3), [b, l])
         e_2 = np.random.normal(0., np.sqrt(0.5), [b, l])
@@ -153,7 +161,6 @@ class enc_IB(nn.Module):
         s = F.elu(self.fc2(s + F.sigmoid(e_2)))
         s = self.fc3(s + F.sigmoid(e_3))
         return s
-
 
 
 if __name__ == '__main__':
