@@ -11,12 +11,15 @@ import nn_net.encoder as encoder
 import nn_net.discriminator as discriminator
 import estimator.lower_bound as lb
 import tools.file_helper as fh
+import tools.summary as summary
 
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 
 import argparse
 import os
+
+from sklearn.cluster import AgglomerativeClustering
 
 
 def ma(a, window_size=100):
@@ -34,7 +37,7 @@ else:
 num_devices = torch.cuda.device_count()
 
 
-def main(train_loader, test_loader, args, input_shape):
+def main(train_loader, test_loader, args, input_shape, num_labels):
     """
     NN models
     """
@@ -72,10 +75,6 @@ def main(train_loader, test_loader, args, input_shape):
     global_mi = []
     prior_match = []
     dim = []
-
-    clf_loss = []
-
-    min_loss = 1e8
 
     """
     Train
@@ -117,11 +116,8 @@ def main(train_loader, test_loader, args, input_shape):
             local_mi.append(l_mi.item())
             prior_match.append(pm.data.numpy())
 
-            clf = F.cross_entropy(z, y)
+            print ('epoch %d, dim %f' % (e, -loss.item()))
 
-            print ('epoch %d, loss %f, clf loss %f' % (e, loss.item(), clf.item()))
-
-            clf_loss.append(clf.item())
             dim.append(-loss.item())
 
         gma = ma(global_mi)
@@ -148,13 +144,6 @@ def main(train_loader, test_loader, args, input_shape):
         # plt.cla()
         plt.close(fig)
 
-        fig, _ = plt.subplots()
-        plt.xlabel('epoch')
-        plt.plot(clf_loss, color='b')
-        plt.savefig('results/' + args.exp_id + '/clf.png')
-        # plt.cla()
-        plt.close(fig)
-
     state = {
         'epoch': EPOCH + 1,
         'GD_state_dict': GD.state_dict(),
@@ -168,7 +157,7 @@ def main(train_loader, test_loader, args, input_shape):
     """
     Test
     """
-
+    print '#'*20
     """
     Reload NN models
     """
@@ -184,24 +173,30 @@ def main(train_loader, test_loader, args, input_shape):
     E.load_state_dict(checkpoints['E_state_dict'])
 
     E.eval()
-    predicts = []
+    codes = []
     gt = []
+    images = []
 
     for batch_idx, (X, y) in enumerate(test_loader):
         X = X.view(-1, *input_shape).to(device=device)
-        y = y.to(device=device)
-
+        gt.append(y.to(device='cpu').data.numpy())
+        images.append(X.to(device='cpu').data.numpy().reshape(-1, *input_shape))
         c, z = E(X)
-        preds = np.argmax(c.to(device='cpu').data.numpy(), axis=1)
-        predicts.append(preds)
+        codes.append(c.to(device='cpu').data.numpy())
 
-        gy = y.to(device='cpu').data.numpy()
-        gt.append(gy)
+    codes = np.concatenate(codes, axis=0)
+    images = np.concatenate(images, axis=0)
+    gt = np.concatenate(gt, axis=0)
 
-        print ('test mode, error %f' % (np.sum(preds != gy) * 1.0 / gy.shape[0]))
+    cluster = AgglomerativeClustering(n_clusters=num_labels, affinity='euclidean', linkage='ward')
+    cluster.fit_predict(np.array(codes))
+    pred_labels = cluster.labels_
 
-    predicts = np.concatenate(predicts)
-    gt = np.concatenate(gt)
+    print '#'*20
+    print 'error rate: ', summary.cluster_errrate(pred_labels, gt, num_labels)
+    f_img = summary.cluster_imgs(images, pred_labels, num_labels)
 
-    print '###############'
-    print 'error rate: {}'.format(np.sum(predicts != gt) * 1.0 / gt.shape[0])
+    fig, _ = plt.subplots()
+    plt.imshow(f_img)
+    plt.savefig('results/' + args.exp_id + '/cluster.png')
+    plt.close(fig)

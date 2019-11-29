@@ -25,7 +25,7 @@ Data loader
 GPU/CPU check
 """
 parser = argparse.ArgumentParser()
-parser.add_argument("--epochs", "-e", type=int, default=10)
+parser.add_argument("--epochs", "-e", type=int, default=5)
 parser.add_argument("--batches", "-b", type=int, default=64)
 parser.add_argument("--lr", "-l", type=float, default=1.E-4)
 parser.add_argument("--alpha", "-A", type=float, default=0.5)
@@ -45,7 +45,7 @@ else:
 
 num_devices = torch.cuda.device_count()
 
-thousand = np.arange(1000)
+thousand = np.arange(100)
 
 mnist_train = datasets.MNIST(root='.', train=True, download=True,
                              transform=transforms.Compose(
@@ -73,4 +73,4 @@ train_loader = torch.utils.data.DataLoader(
 test_loader = torch.utils.data.DataLoader(
     testset, batch_size=args.batches, shuffle=True, num_workers=4 * num_devices)
 
-dim.main(train_loader, test_loader, args, (1, 28, 28))
+dim.main(train_loader, test_loader, args, (1, 28, 28), 10)
