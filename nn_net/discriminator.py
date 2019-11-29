@@ -22,6 +22,7 @@ class ImgnLocalDisc(nn.Module):
             feature_idx=None
         )
 
+        self.config = config
         self.conv = CNN.ConvNet(config)
         self.shape_hist = self.compute_shape()
 
@@ -72,10 +73,10 @@ class ImgnGlobalDisc(nn.Module):
                 # {'layer': 'conv', 'args': (32, 3, 1, 0), 'bn': False, 'act': 'ReLU'},
                 {'layer': 'flatten'},
             ],
-            'local_task_idx': (None, None)
+            'feature_idx': None
         }
 
-        output_shape = (sum(feature_shape) + code_shape[0],)
+        output_shape = (np.prod(feature_shape) + code_shape[0],)
 
         linear2scalar = {
             'input_shape': output_shape,
@@ -84,7 +85,7 @@ class ImgnGlobalDisc(nn.Module):
                 {'layer': 'linear', 'args': (512,), 'bn': False, 'act': 'ReLU'},
                 {'layer': 'linear', 'args': (1,), 'bn': False, 'act': None}
             ],
-            'local_task_idx': (None, None)
+            'feature_idx': None
         }
 
         self.required_input_shape = conv2linear['input_shape']
@@ -114,6 +115,7 @@ class ImgnPriorDisc(nn.Module):
                     dict(layer='linear', args=(1, ), bn=False, act='sigmoid')],
             feature_idx=None
         )
+        self.config = config
         self.linear2scalar = CNN.ConvNet(config)
 
     def forward(self, X):
