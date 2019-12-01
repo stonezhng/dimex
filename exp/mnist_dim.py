@@ -32,7 +32,7 @@ parser.add_argument("--alpha", "-A", type=float, default=0.5)
 parser.add_argument("--beta", "-B", type=float, default=1.0)
 parser.add_argument("--gamma", "-G", type=float, default=0.1)
 parser.add_argument("--exp_id", "-I", type=str, default='0')
-parser.add_argument("--debug", "-D", type=bool, default=True)
+parser.add_argument("--debug", "-D", type=int, default=1)
 args = parser.parse_args()
 
 if not os.path.exists('results/'+args.exp_id):
@@ -59,8 +59,6 @@ mnist_test = datasets.MNIST(root='.', train=False, download=True,
 
 train_subset = torch.utils.data.Subset(mnist_train, thousand)
 test_subset = torch.utils.data.Subset(mnist_test, thousand)
-
-print args.debug
 
 if args.debug:
     trainset = train_subset

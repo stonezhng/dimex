@@ -33,7 +33,7 @@ parser.add_argument("--beta", "-B", type=float, default=1.0)
 parser.add_argument("--gamma", "-G", type=float, default=0.1)
 parser.add_argument("--lam", "-L", type=float, default=0.1)
 parser.add_argument("--exp_id", "-I", type=str, default='0')
-parser.add_argument("--debug", "-D", type=bool, default=True)
+parser.add_argument("--debug", "-D", type=int, default=1)
 args = parser.parse_args()
 
 if not os.path.exists('results/'+args.exp_id):

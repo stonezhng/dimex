@@ -110,7 +110,7 @@ def main(train_loader, test_loader, args, input_shape, num_labels):
             l_mi = torch.mean(lb.biased_DV(LD, z, c, c_hat))
 
             # prior match
-            p = torch.FloatTensor(*z.shape).uniform_(0, 1)
+            p = torch.FloatTensor(*z.shape).uniform_(0, 1).to(device)
             term_a = torch.mean(torch.log(PD(p)))
             term_b = torch.mean(torch.log(1. - PD(z)))
             pm = term_a + term_b
@@ -128,7 +128,7 @@ def main(train_loader, test_loader, args, input_shape, num_labels):
 
             global_mi.append(g_mi.item())
             local_mi.append(l_mi.item())
-            prior_match.append(pm.data.numpy())
+            prior_match.append(pm.cpu().data.numpy())
 
             print ('epoch %d, dim %f' % (e, -loss.item()))
 
@@ -158,6 +158,64 @@ def main(train_loader, test_loader, args, input_shape, num_labels):
         # plt.cla()
         plt.close(fig)
 
+        if (e + 1) % 10 == 0:
+            state = {
+                'epoch': e + 1,
+                'GD_state_dict': GD.state_dict(),
+                'LD_state_dict': LD.state_dict(),
+                'PD_state_dict': PD.state_dict(),
+                'E_state_dict': E.state_dict(),
+                'opt': opt.state_dict()
+            }
+            fh.save_checkpoint(state, filename='results/' + args.exp_id + '/minmax_model.pth.tar')
+
+            """
+            Test
+            """
+            print '#' * 20
+            """
+            Reload NN models
+            """
+            checkpoints = torch.load('results/' + args.exp_id + '/minmax_model.pth.tar')
+
+            # encoder, output c are used as the clf, output z are used as the code
+            E = encoder.ImgnEncoder(input_shape).to(device=device)
+
+            shape_hist = E.shape_hist
+            feature_shape = shape_hist[E.config['feature_idx']]
+            code_shape = shape_hist[-1]
+
+            E.load_state_dict(checkpoints['E_state_dict'])
+
+            E.eval()
+            codes = []
+            gt = []
+            images = []
+
+            for batch_idx, (X, y) in enumerate(test_loader):
+                X = X.view(-1, *input_shape).to(device=device)
+                gt.append(y.to(device='cpu').data.numpy())
+                images.append(X.to(device='cpu').data.numpy().reshape(-1, *input_shape))
+                c, z = E(X)
+                codes.append(c.to(device='cpu').data.numpy())
+
+            codes = np.concatenate(codes, axis=0)
+            images = np.concatenate(images, axis=0)
+            gt = np.concatenate(gt, axis=0)
+
+            cluster = AgglomerativeClustering(n_clusters=num_labels, affinity='euclidean', linkage='ward')
+            cluster.fit_predict(np.array(codes))
+            pred_labels = cluster.labels_
+
+            print '#' * 20
+            print 'error rate: ', summary.cluster_errrate(pred_labels, gt, num_labels)
+            f_img = summary.cluster_imgs(images[:100], pred_labels[:100], num_labels)
+
+            fig, _ = plt.subplots()
+            plt.imshow(f_img)
+            plt.savefig('results/' + args.exp_id + '/cluster.png')
+            plt.close(fig)
+
     state = {
         'epoch': EPOCH + 1,
         'GD_state_dict': GD.state_dict(),
@@ -167,50 +225,3 @@ def main(train_loader, test_loader, args, input_shape, num_labels):
         'opt': opt.state_dict()
     }
     fh.save_checkpoint(state, filename='results/' + args.exp_id + '/last_minmax_model.pth.tar')
-
-    """
-    Test
-    """
-    print '#'*20
-    """
-    Reload NN models
-    """
-    checkpoints = torch.load('results/' + args.exp_id + '/last_minmax_model.pth.tar')
-
-    # encoder, output c are used as the clf, output z are used as the code
-    E = encoder.ImgnEncoder(input_shape).to(device=device)
-
-    shape_hist = E.shape_hist
-    feature_shape = shape_hist[E.config['feature_idx']]
-    code_shape = shape_hist[-1]
-
-    E.load_state_dict(checkpoints['E_state_dict'])
-
-    E.eval()
-    codes = []
-    gt = []
-    images = []
-
-    for batch_idx, (X, y) in enumerate(test_loader):
-        X = X.view(-1, *input_shape).to(device=device)
-        gt.append(y.to(device='cpu').data.numpy())
-        images.append(X.to(device='cpu').data.numpy().reshape(-1, *input_shape))
-        c, z = E(X)
-        codes.append(c.to(device='cpu').data.numpy())
-
-    codes = np.concatenate(codes, axis=0)
-    images = np.concatenate(images, axis=0)
-    gt = np.concatenate(gt, axis=0)
-
-    cluster = AgglomerativeClustering(n_clusters=num_labels, affinity='euclidean', linkage='ward')
-    cluster.fit_predict(np.array(codes))
-    pred_labels = cluster.labels_
-
-    print '#'*20
-    print 'error rate: ', summary.cluster_errrate(pred_labels, gt, num_labels)
-    f_img = summary.cluster_imgs(images, pred_labels, num_labels)
-
-    fig, _ = plt.subplots()
-    plt.imshow(f_img)
-    plt.savefig('results/' + args.exp_id + '/cluster.png')
-    plt.close(fig)
