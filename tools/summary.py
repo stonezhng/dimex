@@ -24,6 +24,9 @@ def cluster_imgs(images, pred_labels, num_labels):
     clustered_img = []
     for i in range(num_labels):
         idx = np.where(pred_labels == i)[0]
+        if len(idx) == 0:
+            clustered_img.append(None)
+            continue
         if len(idx) > max_cl:
             max_cl = len(idx)
         line_img = np.concatenate([images[i] for i in idx], axis=2)
@@ -33,8 +36,18 @@ def cluster_imgs(images, pred_labels, num_labels):
     zero_pad = np.zeros((input_shape[0], input_shape[1] * num_labels, input_shape[2] * max_cl))
     for i in range(num_labels):
         cm = clustered_img[i]
-
+        if cm is None:
+            continue
         zero_pad[:, i*cm.shape[1]: (i+1)*cm.shape[1], :cm.shape[2]] = cm
 
     zero_pad = zero_pad.squeeze()
     return zero_pad
+
+
+def code_visualize(code_list, labels):
+    """
+    :param code_list: (B, 64) code
+    :param labels: (B,) labels
+    :return:
+    """
+    label_type = np.unique(labels)

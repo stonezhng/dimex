@@ -131,7 +131,10 @@ class flate_enc_IB(nn.Module):
         super(flate_enc_IB, self).__init__()
         self.device = device
 
-        input_dim = np.prod(x_shape) + code_shape[0]
+        try:
+            input_dim = np.prod(x_shape) + code_shape[0]
+        except:
+            input_dim = x_shape + code_shape
 
         self.fc1 = nn.Linear(input_dim, input_dim)
         self.fc2 = nn.Linear(input_dim, input_dim)

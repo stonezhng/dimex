@@ -215,4 +215,5 @@ venv.bak/
 .idea
 deep-INFOMAX
 set_up.sh
+/exp/results
 

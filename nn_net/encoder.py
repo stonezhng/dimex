@@ -48,13 +48,56 @@ class ImgnEncoder(nn.Module):
 
         self.config = dict(
             input_shape=input_shape,
-            layers=[dict(layer='conv', args=(64, 4, 2, 1), bn=True, act='ReLU'),
+            layers=[
+                    dict(layer='conv', args=(64, 4, 2, 1), bn=True, act='ReLU'),
                     dict(layer='conv', args=(128, 4, 2, 1), bn=True, act='ReLU'),
                     dict(layer='conv', args=(256, 4, 2, 1), bn=True, act='ReLU'),
                     dict(layer='conv', args=(512, 4, 2, 1), bn=True, act='ReLU'),
                     dict(layer='flatten'),
                     dict(layer='linear', args=(64,), bn=True, act='ReLU')],
             feature_idx=1
+        )
+        self.conv = CNN.ConvNet(self.config)
+        self.shape_hist = self.compute_shape()
+
+    def compute_shape(self):
+        shape = self.config['input_shape']
+        shape_hist = []
+
+        layers = self.config['layers']
+        for l in layers:
+            if l['layer'] == 'conv':
+                dim_in, dim_x, dim_y = shape
+                dim_out, f, s, p = l['args']
+                shape = (dim_out, (dim_x - f + 2 * p) // s + 1, (dim_y - f + 2 * p) // s + 1)
+                shape_hist.append(deepcopy(shape))
+            elif l['layer'] == 'flatten':
+                s = 1
+                for d in shape:
+                    s *= d
+                shape = (s, )
+                shape_hist.append(deepcopy(shape))
+            elif l['layer'] == 'linear':
+                shape = l['args']
+                shape_hist.append(deepcopy(shape))
+        return shape_hist
+
+    def forward(self, input_):
+        return self.conv(input_)  # Y (global feature), C (feature map)
+
+
+class ImgnIBEncoder(nn.Module):
+    def __init__(self, input_shape):
+        super(ImgnIBEncoder, self).__init__()
+
+        self.config = dict(
+            input_shape=input_shape,
+            layers=[
+                    dict(layer='conv', args=(256, 4, 2, 1), bn=True, act='ReLU'),
+                    dict(layer='conv', args=(512, 4, 2, 1), bn=True, act='ReLU'),
+                    dict(layer='flatten'),
+                    dict(layer='linear', args=(64,), bn=True, act='ReLU')],
+            feature_idx=None
         )
         self.conv = CNN.ConvNet(self.config)
         self.shape_hist = self.compute_shape()

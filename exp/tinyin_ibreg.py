@@ -32,7 +32,7 @@ parser.add_argument("--lr", "-l", type=float, default=1.E-4)
 parser.add_argument("--alpha", "-A", type=float, default=0.5)
 parser.add_argument("--beta", "-B", type=float, default=1.0)
 parser.add_argument("--gamma", "-G", type=float, default=0.1)
-parser.add_argument("--exp_id", "-I", type=str, default='ib0')
+parser.add_argument("--exp_id", "-I", type=str, default='tiny0')
 parser.add_argument("--debug", "-D", type=int, default=1)
 parser.add_argument("--test", "-T", type=int, default=0)
 args = parser.parse_args()
@@ -49,15 +49,36 @@ num_devices = torch.cuda.device_count()
 
 thousand = np.arange(100)
 
-mnist_train = datasets.MNIST(root='.', train=True, download=True,
-                             transform=transforms.Compose(
-                                 [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]
-                             ))
+X_train = np.load('X_train_tinyin.npy')
+Y_train = np.load('Y_train_tinyin.npy')
+X_train = np.swapaxes(X_train, 1, 3)
 
-mnist_test = datasets.MNIST(root='.', train=False, download=True,
-                            transform=transforms.Compose(
-                                [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]
-                            ))
+X_val = np.load('X_val_tinyin.npy')
+Y_val = np.load('Y_val_tinyin.npy')
+X_val = np.swapaxes(X_val, 1, 3)
+
+X_subtrain = X_train[Y_train < 10].copy()
+Y_subtrain = Y_train[Y_train < 10].copy()
+
+X_subval = X_val[Y_val < 10].copy()
+Y_subval = Y_val[Y_val < 10].copy()
+
+print X_subtrain.shape
+print Y_subtrain.shape
+print X_subval.shape
+print Y_subval.shape
+
+mnist_train = torch.utils.data.TensorDataset(torch.from_numpy(X_train).float().to(device),
+                                             torch.from_numpy(Y_train).float().to(device))
+
+mnist_test = torch.utils.data.TensorDataset(torch.from_numpy(X_val).float().to(device),
+                                            torch.from_numpy(Y_val).float().to(device))
+
+sub_train = torch.utils.data.TensorDataset(torch.from_numpy(X_subtrain).float().to(device),
+                                             torch.from_numpy(Y_subtrain).float().to(device))
+
+sub_val = torch.utils.data.TensorDataset(torch.from_numpy(X_subval).float().to(device),
+                                            torch.from_numpy(Y_subval).float().to(device))
 
 train_subset = torch.utils.data.Subset(mnist_train, thousand)
 test_subset = torch.utils.data.Subset(mnist_test, thousand)
@@ -70,14 +91,16 @@ if args.debug:
 else:
     trainset = mnist_train
     testset = mnist_test
+    # trainset = sub_train
+    # testset = sub_val
 
 train_loader = torch.utils.data.DataLoader(
-    trainset, batch_size=args.batches, shuffle=True, num_workers=4 * num_devices)
+    trainset, batch_size=args.batches, shuffle=True, num_workers=0)
 
 test_loader = torch.utils.data.DataLoader(
-    testset, batch_size=args.batches, shuffle=True, num_workers=4 * num_devices)
+    testset, batch_size=args.batches, shuffle=True, num_workers=0)
 
 if not args.test:
-    dimib.main(train_loader, test_loader, args, (1, 28, 28), 10)
+    dimib.main(train_loader, test_loader, args, (3, 64, 64), 10)
 else:
-    dimib_test.main(test_loader, args, (1, 28, 28), 10)
+    dimib_test.main(test_loader, args, (3, 64, 64), 10)

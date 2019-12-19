@@ -3,6 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from mnist import MNIST
 import matplotlib.pyplot as plt
+plt.switch_backend('agg')
+
 
 import numpy as np
 
@@ -20,6 +22,8 @@ import argparse
 import os
 
 from sklearn.cluster import AgglomerativeClustering
+from sklearn.neighbors import NearestNeighbors
+from sklearn.cluster import KMeans
 
 
 def ma(a, window_size=100):
@@ -38,6 +42,8 @@ num_devices = torch.cuda.device_count()
 
 
 def main(train_loader, test_loader, args, input_shape, num_labels):
+    neigh = NearestNeighbors(n_neighbors=num_labels)
+
     """
     NN models
     """
@@ -51,10 +57,10 @@ def main(train_loader, test_loader, args, input_shape, num_labels):
     # "Discriminator", AKA the T net in MINE, for global and local MI estimation
     GD = discriminator.ImgnGlobalDisc(feature_shape, code_shape).to(device=device)
     LD = discriminator.ImgnLocalDisc(feature_shape, code_shape).to(device=device)
+    alpha_net = mi_net.TriLayerNet(code_shape[0], 256).to(device=device)
 
     # This one is a true discriminator
     PD = discriminator.ImgnPriorDisc(code_shape).to(device=device)
-
     """
     Hyperparams
     """
@@ -68,7 +74,7 @@ def main(train_loader, test_loader, args, input_shape, num_labels):
     Optimizer
     """
     opt = torch.optim.Adam(
-        list(E.parameters()) + list(GD.parameters()) + list(LD.parameters()) + list(PD.parameters()),
+        list(E.parameters()) + list(GD.parameters()) + list(LD.parameters()) + list(PD.parameters()) + list(alpha_net.parameters()),
         lr=lr)
 
     local_mi = []
@@ -85,6 +91,8 @@ def main(train_loader, test_loader, args, input_shape, num_labels):
         LD.train()
         PD.train()
 
+        codes = []
+
         for batch_idx, (X, y) in enumerate(train_loader):
             opt.zero_grad()
 
@@ -98,8 +106,11 @@ def main(train_loader, test_loader, args, input_shape, num_labels):
             # z: global feature (label), c: feature map
             z, c = E(X)
             _, c_hat = E(X_hat)
-            g_mi = lb.biased_DV(GD, z, c, c_hat)
-            l_mi = torch.mean(lb.biased_DV(LD, z, c, c_hat))
+            g_mi = lb.JSD(GD, z, c, c_hat)
+            l_mi = torch.mean(lb.JSD(LD, z, c, c_hat))
+
+            # g_mi = lb.EB(GD, alpha_net,  c, z)
+            # l_mi = torch.mean(lb.EB(LD, alpha_net, c, z))
 
             # prior match
             p = torch.FloatTensor(*z.shape).uniform_(0, 1).to(device=device)
@@ -119,6 +130,10 @@ def main(train_loader, test_loader, args, input_shape, num_labels):
             print ('epoch %d, dim %f' % (e, -loss.item()))
 
             dim.append(-loss.item())
+
+            codes.append(z.cpu().data.numpy())
+
+        codes = np.concatenate(codes, axis=0)
 
         gma = ma(global_mi)
         lma = ma(local_mi)
@@ -158,6 +173,7 @@ def main(train_loader, test_loader, args, input_shape, num_labels):
             Test
             """
             print '#' * 20
+            neigh.fit(codes)
             """
             Reload NN models
             """
@@ -182,19 +198,33 @@ def main(train_loader, test_loader, args, input_shape, num_labels):
                 gt.append(y.to(device='cpu').data.numpy())
                 images.append(X.to(device='cpu').data.numpy().reshape(-1, *input_shape))
                 c, z = E(X)
+
                 codes.append(c.to(device='cpu').data.numpy())
 
             codes = np.concatenate(codes, axis=0)
+            np.save('results/' + args.exp_id + '/code.npy', codes)
             images = np.concatenate(images, axis=0)
             gt = np.concatenate(gt, axis=0)
 
-            cluster = AgglomerativeClustering(n_clusters=num_labels, affinity='euclidean', linkage='ward')
-            cluster.fit_predict(np.array(codes))
-            pred_labels = cluster.labels_
+            # cluster = AgglomerativeClustering(n_clusters=num_labels, affinity='euclidean', linkage='ward')
+            # cluster.fit_predict(codes)
+            # pred_labels = cluster.labels_
+
+            # neigh = NearestNeighbors(n_neighbors=num_labels)
+            # neigh.fit(codes)
+            # pred_labels = neigh.kneighbors(codes, return_distance=False).squeeze()
+
+            kmeans = KMeans(n_clusters=num_labels, random_state=0).fit(codes)
+            pred_labels = kmeans.labels_
+            print pred_labels.shape
+            print pred_labels
 
             print '#' * 20
             print 'error rate: ', summary.cluster_errrate(pred_labels, gt, num_labels)
             f_img = summary.cluster_imgs(images[:100], pred_labels[:100], num_labels)
+
+            if len(f_img.shape) > 2 and f_img.shape[2] > 3:
+                f_img = np.moveaxis(f_img, 0, -1)
 
             fig, _ = plt.subplots()
             plt.imshow(f_img)
